@@ -14,8 +14,8 @@ using namespace llvm;
 namespace
 {
 
-  // In order to implement the bitvector here, we'll use ValueMap<string, Inst>
-  class ReachingDataFlow : public Dataflow<BinaryOperator *>
+  // In order to implement the bitvector here, we'll use Value *
+  class ReachingDataFlow : public Dataflow<Value *>
   {
   public:
     ReachingDataFlow(Function &F) : Dataflow(FORWARDS)
@@ -27,8 +27,6 @@ namespace
         InBB[&BB] = BitVector(64, false);
 
         OutBB[&BB] = BitVector(64, false);
-
-        outs() << "Basic Block number " << i << " " << &BB << BB << "\n";
         ++i;
       }
     }
@@ -36,18 +34,19 @@ namespace
     void printBinOps(BitVector bv)
     {
 
-      outs() << "{ ";
+      outs() << "{";
       for (auto setIdx : bv.set_bits())
       {
-        outs() << "d" << setIdx << ": ";
+        outs() << "\n\td" << setIdx << ": ";
         getDomain()[setIdx]->print(outs());
-        outs() << "   ";
+        outs() << "";
       }
       outs() << " }\n";
     }
 
-    BitVector meetOp(pred_range predecessorBBs, bool isEntry = false) override
+    BitVector meetOp(BasicBlock &BB, bool isEntry = false) override
     {
+      auto predecessorBBs = predecessors(&BB);
       auto newIn = BitVector(64, false);
       // Calculating IN[BB] = &(Out[P]) for every predecessor P of BB
       for (auto predBB : predecessorBBs)
@@ -82,28 +81,30 @@ namespace
 
       for (auto &inst : BB)
       {
-        BinaryOperator *binInst = dyn_cast<BinaryOperator>(&inst);
-        if (binInst != nullptr)
+        // d1: a = 4
+        // d2: a = 6
+        // genSet = {d2}, killSet = {d1, d2}
+        //
+
+        auto destName = getShortValueName(&inst);
+        if (!isa<BinaryOperator>(inst) && inst.getNumUses() == 0)
         {
-          // d1: a = 4
-          // d2: a = 6
-          // genSet = {d2}, killSet = {d1, d2}
-          //
+          // Instruction probably not of the form
+          // a = b op c
+          continue;
+        }
+        getDomain().push_back(&inst);
+        auto defSeen = getDomain();
 
-          auto destName = getShortValueName(binInst);
-          getDomain().push_back(binInst);
-          auto defSeen = getDomain();
+        auto genIdx = std::find(getDomain().begin(), getDomain().end(), &inst) - getDomain().begin();
 
-          auto genIdx = std::find(getDomain().begin(), getDomain().end(), binInst) - getDomain().begin();
+        genSet.set(genIdx);
 
-          genSet.set(genIdx);
-
-          for (auto itr = getDomain().begin(); itr != std::find(getDomain().begin(), getDomain().end(), binInst); ++itr)
+        for (auto itr = getDomain().begin(); itr != std::find(getDomain().begin(), getDomain().end(), &inst); ++itr)
+        {
+          if (getShortValueName(*itr) == destName)
           {
-            if (getShortValueName(*itr) == destName)
-            {
-              genSet.reset(itr - getDomain().begin());
-            }
+            genSet.reset(itr - getDomain().begin());
           }
         }
       }
@@ -154,7 +155,7 @@ namespace
         BitVector genSet, killSet;
         std::tie(genSet, killSet) = rdf->getGenAndKillSet(BB);
 
-        outs() << "BB Name - " << BB.getName() << "\n";
+        outs() << "BB Name - " << getShortValueName(&BB) << "\n";
         outs() << "Gen BB - ";
         rdf->printBinOps(genSet);
         outs() << "Kill BB - ";

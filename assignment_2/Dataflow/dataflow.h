@@ -89,7 +89,7 @@ namespace llvm
          *
          * @return BitVector
          */
-        virtual BitVector meetOp(pred_range, bool) = 0;
+        virtual BitVector meetOp(BasicBlock &, bool) = 0;
 
         /**
          * @brief Get the Gen And Kill Set object
@@ -128,7 +128,13 @@ namespace llvm
                     if (direction == FORWARDS)
                     {
                         InBB[&BB] &= BitVector(64, false);
-                        InBB[&BB] |= meetOp(predecessors(&BB), (i == 0) ? true : false);
+                        InBB[&BB] |= meetOp(BB, (i == 0) ? true : false);
+                    }
+                    else
+                    {
+
+                        OutBB[&BB] &= BitVector(64, false);
+                        OutBB[&BB] |= meetOp(BB, (i == 0) ? true : false);
                     }
                     // ---------------------
                     // CALCULATING OUT (IN) FOR FORWARD (BACKWARD)
@@ -146,6 +152,17 @@ namespace llvm
                         OutBB[&BB] |= transferFunc(BB);
 
                         if (oldOut != OutBB[&BB])
+                        {
+                            newChanged = true;
+                        }
+                    }
+                    else
+                    {
+                        auto oldIn = InBB[&BB];
+                        InBB[&BB] &= BitVector(64, false);
+                        InBB[&BB] |= transferFunc(BB);
+
+                        if (oldIn != InBB[&BB])
                         {
                             newChanged = true;
                         }

@@ -58,7 +58,6 @@ namespace
 
         OutBB[&BB] = BitVector(64, true);
 
-        outs() << "Basic Block number " << i << " " << &BB << BB << "\n";
         ++i;
       }
     };
@@ -90,8 +89,9 @@ namespace
       return exprSet;
     }
 
-    BitVector meetOp(pred_range predecessorBBs, bool isEntryBB) override
+    BitVector meetOp(BasicBlock &BB, bool isEntryBB) override
     {
+      auto predecessorBBs = predecessors(&BB);
       auto newIn = BitVector(64, true);
       if (isEntryBB == true)
       {
