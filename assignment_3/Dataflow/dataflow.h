@@ -16,8 +16,6 @@
 #include "llvm/IR/ValueMap.h"
 #include "llvm/IR/CFG.h"
 
-#include "available-support.h"
-
 namespace llvm
 {
 
@@ -97,7 +95,7 @@ namespace llvm
          * @param BasicBlock - BasicBlock for which we are calculating the meet operator
          * @return BitVector
          */
-        virtual BitVector meetOp(BasicBlock &, bool) = 0;
+        virtual BitVector meetOp(std::vector<BitVector>) = 0;
 
         /**
          * @brief Get the Gen And Kill Set object
@@ -132,18 +130,28 @@ namespace llvm
                     // CALCULATE ENTRY WITH MEET OPERATOR
                     // ---------------------
 
-                    // Calculating IN[BB] = &(Out[P]) for every predecessor P of BB
+                    // Calculating IN[BB] = meetOp(Out[P]) for every predecessor P of BB
 
                     if (direction == FORWARDS)
                     {
-                        InBB[&BB] &= BitVector(256, false);
-                        InBB[&BB] |= meetOp(BB, (i == 0) ? true : false);
+                        InBB[&BB].reset();
+                        std::vector<BitVector> meetCandidates;
+                        for (auto pred : predecessors(&BB))
+                        {
+                            meetCandidates.push_back(OutBB[pred]);
+                        }
+                        InBB[&BB] |= meetOp(meetCandidates);
                     }
                     else
                     {
 
                         OutBB[&BB] &= BitVector(256, false);
-                        OutBB[&BB] |= meetOp(BB, (i == 0) ? true : false);
+                        std::vector<BitVector> meetCandidates;
+                        for (auto succ : successors(&BB))
+                        {
+                            meetCandidates.push_back(InBB[succ]);
+                        }
+                        OutBB[&BB] |= meetOp(meetCandidates);
                     }
                     // ---------------------
                     // CALCULATING OUT (IN) FOR FORWARD (BACKWARD)

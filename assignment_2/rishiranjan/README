@@ -1,0 +1,41 @@
+# Assignment 2
+
+This folder contains three compiler passes solving Assignment 2 of CS5544
+
+## available Pass
+
+This pass performs available expression analysis on the program and prints it.
+The generated pass is `available.so`
+
+## liveness Pass
+
+This pass performs liveness analysis analysis on the program and prints it.
+The generated pass is `liveness.so`
+
+## reaching Pass
+
+This pass performs reaching definition analysis on the program and prints it.
+The generated pass is `reaching.so`
+
+To build all three passes
+
+```bash
+cd ./Dataflow
+make
+```
+
+This generates the function pass in the form of shared library `LocalOpts.so`
+## Tests
+
+The tests folder contains four test programs for the passes.
+- available-test-m2r.bc (test for available pass)
+- reaching-test-m2r.bc (test for reaching pass)
+- liveness-test-m2r.bc (test for liveness pass)
+
+Every folder has a Makefile which generate the optimized LLVM IR in the filename `out.ll`
+To run any test
+
+```bash
+cd ./tests
+opt -load ../Dataflow/<passname>.so -<passname> <testfile> -o out
+```
