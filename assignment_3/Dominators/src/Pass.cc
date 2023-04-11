@@ -23,6 +23,16 @@ namespace llvm
             OutBB[&entryBB].set(std::find(getDomain().begin(), getDomain().end(), &entryBB) - getDomain().begin());
         }
 
+        std::vector<BasicBlock *> getDomList(BasicBlock *BB)
+        {
+            std::vector<BasicBlock *> doms;
+            for (auto bit : InBB[BB].set_bits())
+            {
+                doms.push_back(getDomain()[bit]);
+            }
+            return doms;
+        }
+
         void printSet(BitVector bv)
         {
 

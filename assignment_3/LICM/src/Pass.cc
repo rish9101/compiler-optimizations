@@ -2,6 +2,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
 #include <llvm/IR/IRBuilder.h>
 #include "Dataflow/dataflow.h"
 
@@ -69,9 +70,10 @@ namespace llvm
         LICMPass() : LoopPass(ID){};
         SmallVector<Value *, 64> invariants;
         SmallVector<Value *, 64> codeMotionCandidates;
-        BasicBlock *test = nullptr;
+        BasicBlock *testBlock = nullptr;
         BasicBlock *landingpad = nullptr;
         BasicBlock *preheader = nullptr;
+        BasicBlock *newHeader = nullptr;
 
         bool isDefOutsideLoop(Value *V, Loop *L)
         {
@@ -107,146 +109,123 @@ namespace llvm
             }
         }
 
-        void generateTest(Loop *L)
+        void getTestCondition(Loop *L)
         {
 
-            auto header = L->getHeader();
-            auto branchInst = dyn_cast<BranchInst>(header->getTerminator());
+            auto headerBlock = L->getHeader();
+            auto headerBranch = dyn_cast<BranchInst>(headerBlock->getTerminator());
 
-            if (branchInst != nullptr && branchInst->isConditional())
+            if (headerBranch == nullptr)
             {
+                outs() << "Error: Header terminator not a branch inst";
+                return;
+            }
 
-                auto conditionalVar = branchInst->getCondition();
-                Value *cmp1 = nullptr, *cmp2 = nullptr, *newOp1 = nullptr, *newOp2 = nullptr;
+            if (headerBranch->isConditional() == false)
+            {
+                // TODO: Handle non conditional branch to body, so don't do anything
+                return;
+            }
+            auto condition = dyn_cast<CmpInst>(headerBranch->getCondition());
 
-                // conditionals are generated using cmp instructions, so we check
-                // the operands of this conditional and see the variable of condition
-                for (auto &I : *header)
+            if (condition == nullptr)
+            {
+                outs() << "Conditional for header branch not a Cmp Inst";
+                return;
+            }
+
+            auto operandOne = condition->getOperand(0);
+            auto operandTwo = condition->getOperand(1);
+
+            outs() << getShortValueName(operandOne) << " " << getShortValueName(operandTwo) << "\n";
+            auto header = L->getHeader();
+            for (auto &inst : *header)
+            {
+                if (dyn_cast<Value>(&inst) == operandOne)
                 {
-                    if (dyn_cast<Value>(&I) == conditionalVar)
+                    auto phi = dyn_cast<PHINode>(&inst);
+                    if (phi == nullptr)
                     {
-                        if (!isa<CmpInst>(&I))
-                            return;
-                        auto cmpInst = dyn_cast<CmpInst>(&I);
-                        cmp1 = cmpInst->getOperand(0);
-                        cmp2 = cmpInst->getOperand(1);
-
-                        outs() << "Operands are : " << getShortValueName(cmp1) << " " << getShortValueName(cmp2) << "\n";
+                        outs() << "Test block defines variable outside phi function\n";
+                        return;
                     }
+                    operandOne = phi->getIncomingValueForBlock(L->getLoopPreheader());
                 }
-
-                newOp1 = cmp1;
-                newOp2 = cmp2;
-
-                for (auto &I : *header)
+                else if (dyn_cast<Value>(&inst) == operandTwo)
                 {
-                    if (Instruction::PHI == I.getOpcode())
+                    auto phi = dyn_cast<PHINode>(&inst);
+                    if (phi == nullptr)
                     {
+                        outs() << "Test block defines variable outside phi function\n";
+                        return;
                     }
-                    if (dyn_cast<Value>(&I) == cmp1 || dyn_cast<Value>(&I) == cmp2)
-                    {
-                        if (Instruction::PHI == I.getOpcode())
-                        {
-                            auto phi = dyn_cast<PHINode>(&I);
-                            auto entryOp = phi->getIncomingValueForBlock(preheader);
-                            if (dyn_cast<Value>(&I) == cmp1)
-                            {
-                                newOp1 = entryOp;
-                            }
-                            if (dyn_cast<Value>(&I) == cmp2)
-                            {
-                                newOp2 = entryOp;
-                            }
-                        }
-                    }
-                }
-
-                outs() << "New Operands are : " << getShortValueName(newOp1) << " " << getShortValueName(newOp2) << "\n";
-
-                //  Remove phi instructions from the original header
-                SmallVector<Instruction *, 10> toRemove;
-                for (auto &I : *header)
-                {
-                    if (Instruction::PHI == I.getOpcode())
-                    {
-                        outs() << "We have PHI Node : " << I;
-                        auto phinode = dyn_cast<PHINode>(&I);
-                        for (auto &phival : phinode->incoming_values())
-                        {
-                            if (phival.get() != phinode->getIncomingValueForBlock(preheader))
-                            {
-
-                                phinode->replaceAllUsesWith(phival.get());
-                                outs() << getShortValueName(phival.get()) << "\n";
-                                break;
-                            }
-                        }
-                        // phinode->eraseFromParent();
-                        toRemove.push_back(&I);
-                    }
-                }
-
-                // We have the two operands for cmp instruction now. Insert the instruction
-
-                auto oldCmp = dyn_cast<CmpInst>(conditionalVar);
-
-                IRBuilder<> *builder = new IRBuilder<>(test->getContext());
-                builder->SetInsertPoint(test);
-
-                auto newCmp = builder->CreateICmp(oldCmp->getPredicate(), newOp1, newOp2, "new-test");
-
-                BranchInst *br = builder->CreateCondBr(newCmp, landingpad, L->getExitBlock());
-                outs() << "test: " << *newCmp << "  " << *br << *test;
-
-                outs() << "Removeable insts ";
-                for (auto inst : toRemove)
-                {
-                    outs() << *inst;
-                    inst->eraseFromParent();
+                    operandTwo = phi->getIncomingValueForBlock(L->getLoopPreheader());
                 }
             }
+
+            // auto newConditional = CmpInst::Create(condition->getOpcode(), condition->getPredicate(), operandOne, operandTwo, "new-cmp", nullptr);
+            auto term = testBlock->getTerminator();
+            term->eraseFromParent();
+
+            auto newConditional = CmpInst::Create(condition->getOpcode(), condition->getPredicate(), operandOne, operandTwo, "new-cmp", testBlock);
+            auto newTerm = BranchInst::Create(landingpad, L->getExitBlock(), newConditional, testBlock);
         }
 
-        void createLandingPad(Loop *L)
+        void movePhisToBodyAndExit(Loop *L, BasicBlock *body)
         {
-            // We insert the landing pad blocks
-
+            // We have to move phi instructions to the body now, which is the new header
             auto header = L->getHeader();
-            auto preHeader = L->getLoopPredecessor();
-
-            BasicBlock *newHeader = BasicBlock::Create(header->getContext(), "test", header->getParent(), header);
-
-            BasicBlock *landingPad = BasicBlock::Create(header->getContext(), "landing-pad", header->getParent(), header);
-
-            // Insert a branch terminator instruction in newHeader and landingPad
-
-            BasicBlock *body;
-            for (auto successor : successors(header))
+            std::vector<PHINode *> instToMove;
+            std::vector<Instruction *> newInstructions;
+            std::vector<Value *> valueToReplace;
+            llvm::ValueToValueMapTy vmap;
+            for (auto &phi : header->phis())
             {
-                if (std::find(L->getBlocks().begin(), L->getBlocks().end(), successor) != L->getBlocks().end())
+                instToMove.push_back(dyn_cast<PHINode>(&phi));
+            }
+            for (auto i : instToMove)
+            {
+
+                auto *newInst = dyn_cast<PHINode>(i->clone());
+                newInst->setIncomingBlock(0, testBlock);
+                newInst->setName("phi-" + i->getName());
+                newInst->setIncomingBlock(1, header);
+                newInst->insertBefore(&(L->getExitBlock()->front()));
+                newInstructions.push_back(newInst);
+                vmap[i] = newInst;
+
+                valueToReplace.push_back(i);
+
+                i->moveBefore(&body->front());
+                i->setIncomingBlock(0, landingpad);
+                i->setIncomingBlock(1, header);
+            }
+
+            for (auto *i : newInstructions)
+            {
+                llvm::RemapInstruction(i, vmap, RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+            }
+            for (size_t i = 0; i < newInstructions.size(); i++)
+            {
+                Value *v = valueToReplace[i];
+
+                for (auto user : v->users())
                 {
-                    body = successor;
+                    if (auto I = dyn_cast<Instruction>(user))
+                    {
+                        if (std::find(L->blocks().begin(), L->blocks().end(), I->getParent()) == L->blocks().end())
+                        {
+                            for (int opNum = 0; opNum < I->getNumOperands(); ++opNum)
+                            {
+                                if (v == I->getOperand(opNum))
+                                {
+                                    I->setOperand(opNum, newInstructions[i]);
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            BranchInst::Create(body, landingPad);
-
-            // Fix the destination of branches in header and preheader
-            auto preHeaderBranch = dyn_cast<BranchInst>(preHeader->getTerminator());
-            for (size_t i = 0; i < preHeaderBranch->getNumSuccessors(); ++i)
-            {
-                if (preHeaderBranch->getSuccessor(i) == header)
-                {
-                    preHeaderBranch->setSuccessor(i, newHeader);
-                }
-            }
-            outs() << "preheader: " << *preHeader << "\n";
-
-            outs() << "header: " << *header << "\n";
-            outs() << "newheader: " << *newHeader << "\n";
-
-            outs() << "landingPad: " << *landingPad << "\n";
-            test = newHeader;
-            landingpad = landingPad;
         }
 
         virtual bool runOnLoop(Loop *L, LPPassManager &LPM) override
@@ -308,29 +287,102 @@ namespace llvm
                 outs() << *(dyn_cast<Instruction>(V)) << "\n";
             }
 
-            getPreHeader(L);
-            createLandingPad(L);
-            generateTest(L);
+            preheader = L->getLoopPreheader();
+            BasicBlock *body = nullptr;
+            for (auto succ : successors(L->getHeader()))
+            {
+                if (succ != L->getExitBlock())
+                {
+                    body = succ;
+                }
+            }
+
+            testBlock = SplitEdge(preheader, L->getHeader(), nullptr, nullptr, nullptr);
+            testBlock->setName("test");
+            landingpad = SplitEdge(testBlock, L->getHeader());
+            landingpad->setName("landing-pad");
 
             // Code Motion Candidates
 
+            getTestCondition(L);
+            movePhisToBodyAndExit(L, body);
+
+            dyn_cast<BranchInst>(landingpad->getTerminator())->setSuccessor(0, body);
             auto dominators = getAnalysis<DominatorsPass>().getDominators();
 
             SmallVector<BasicBlock *, 64> loopExitBlocks;
-            L->getExitBlocks(loopExitBlocks);
+
+            for (auto &BB : *testBlock->getParent())
+            {
+                outs() << BB;
+            }
+
+            auto dfa = new DominatorsDFA(*testBlock->getParent());
+            dfa->performDFA(*testBlock->getParent());
+
+            for (auto &BB : *testBlock->getParent())
+            {
+                outs() << "Printing Dominators for " << BB.getName() << "\n";
+                dfa->printSet(dfa->InBB[&BB]);
+            }
+
+            L->getExitingBlocks(loopExitBlocks);
+
+            // After Landing Pad insertion
+
+            std::vector<PHINode *> removablePhis;
 
             // Check for Code Motion candidates
             for (auto invariant : invariants)
             {
                 bool canMove = true;
+                if (isa<PHINode>(invariant))
+                {
+                    canMove = false;
+                }
                 for (auto loopExitBlock : loopExitBlocks)
                 {
-                    auto exitDom = dominators[loopExitBlock];
+                    auto exitDom = dfa->getDomList(loopExitBlock);
+                    outs() << "Exit BB DOM: ";
+                    for (auto a : exitDom)
+                    {
+                        outs() << a->getName() << " ";
+                    }
                     if (std::find(exitDom.begin(), exitDom.end(), dyn_cast<Instruction>(invariant)->getParent()) == exitDom.end())
                         canMove = false;
                 }
+
+                if (canMove)
+                {
+                    outs() << "Can Move : " << *dyn_cast<Instruction>(invariant);
+
+                    dyn_cast<Instruction>(invariant)->moveBefore(landingpad->getTerminator());
+
+                    //  If any phi function in body used this value, replace its uses with this value
+                    for (auto &phi : body->phis())
+                    {
+                        bool removePhi = false;
+
+                        for (auto &val : phi.incoming_values())
+                        {
+                            if (val.get() == invariant)
+                            {
+                                removePhi = true;
+                            }
+                        }
+                        if (removePhi)
+                        {
+                            phi.replaceAllUsesWith(invariant);
+                            removablePhis.push_back(&phi);
+                        }
+                    }
+                }
             }
 
+            for (auto phi : removablePhis)
+            {
+                phi->eraseFromParent();
+            }
             return true;
         }
 
