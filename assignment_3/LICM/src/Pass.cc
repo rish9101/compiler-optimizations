@@ -230,14 +230,11 @@ namespace llvm
 
         virtual bool runOnLoop(Loop *L, LPPassManager &LPM) override
         {
+
+            outs() << "Performing Loop Invariant Code Motion\n";
             bool changed = true;
 
             int numInv = 0;
-
-            for (auto BB : L->blocks())
-            {
-                outs() << BB->getName() << "\n";
-            }
 
             while (changed)
             {
@@ -249,7 +246,7 @@ namespace llvm
                     for (auto &I : *BB)
                     {
                         bool isInv = true;
-                        if (!isAssignmentInstruction(I))
+                        if (!isAssignmentInstruction(I) || isa<PHINode>(&I))
                         {
                             continue;
                         }
@@ -279,12 +276,25 @@ namespace llvm
                 }
             }
 
-            outs() << "Loop Invariants are :- "
-                   << "\n";
-            for (auto V : invariants)
-            {
+            // We check if loop is while or do-while,
+            // do-while loops do not require a landing pad
 
-                outs() << *(dyn_cast<Instruction>(V)) << "\n";
+            if (dyn_cast<BranchInst>(L->getLoopLatch()->getTerminator())->isConditional())
+            {
+                outs() << "We have a do-while loop\n";
+
+                auto doms = getAnalysis<DominatorsPass>().getDominators();
+                auto exitDom = doms[L->getExitBlock()];
+                for (auto inv : invariants)
+                {
+                    auto invariant = dyn_cast<Instruction>(inv);
+                    if (std::find(exitDom.begin(), exitDom.end(), invariant->getParent()) != exitDom.end())
+                    {
+                        invariant->moveBefore(L->getLoopPreheader()->getTerminator());
+                    }
+                }
+
+                return true;
             }
 
             preheader = L->getLoopPreheader();
@@ -307,24 +317,21 @@ namespace llvm
             getTestCondition(L);
             movePhisToBodyAndExit(L, body);
 
+            L->moveToHeader(body);
+            LoopInfo LI;
+            if (auto parentLoop = L->getParentLoop())
+            {
+                parentLoop->addBasicBlockToLoop(testBlock, LI);
+                parentLoop->addBasicBlockToLoop(landingpad, LI);
+            }
+
             dyn_cast<BranchInst>(landingpad->getTerminator())->setSuccessor(0, body);
             auto dominators = getAnalysis<DominatorsPass>().getDominators();
 
             SmallVector<BasicBlock *, 64> loopExitBlocks;
 
-            for (auto &BB : *testBlock->getParent())
-            {
-                outs() << BB;
-            }
-
             auto dfa = new DominatorsDFA(*testBlock->getParent());
             dfa->performDFA(*testBlock->getParent());
-
-            for (auto &BB : *testBlock->getParent())
-            {
-                outs() << "Printing Dominators for " << BB.getName() << "\n";
-                dfa->printSet(dfa->InBB[&BB]);
-            }
 
             L->getExitingBlocks(loopExitBlocks);
 
@@ -343,18 +350,13 @@ namespace llvm
                 for (auto loopExitBlock : loopExitBlocks)
                 {
                     auto exitDom = dfa->getDomList(loopExitBlock);
-                    outs() << "Exit BB DOM: ";
-                    for (auto a : exitDom)
-                    {
-                        outs() << a->getName() << " ";
-                    }
+
                     if (std::find(exitDom.begin(), exitDom.end(), dyn_cast<Instruction>(invariant)->getParent()) == exitDom.end())
                         canMove = false;
                 }
 
                 if (canMove)
                 {
-                    outs() << "Can Move : " << *dyn_cast<Instruction>(invariant);
 
                     dyn_cast<Instruction>(invariant)->moveBefore(landingpad->getTerminator());
 
@@ -383,6 +385,7 @@ namespace llvm
             {
                 phi->eraseFromParent();
             }
+
             return true;
         }
 

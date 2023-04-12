@@ -26,7 +26,7 @@ namespace llvm
         std::vector<BasicBlock *> getDomList(BasicBlock *BB)
         {
             std::vector<BasicBlock *> doms;
-            for (auto bit : InBB[BB].set_bits())
+            for (auto bit : OutBB[BB].set_bits())
             {
                 doms.push_back(getDomain()[bit]);
             }
