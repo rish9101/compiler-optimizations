@@ -1,0 +1,25 @@
+project(heap-liveness-analysis)
+
+cmake_minimum_required(VERSION 3.1)
+
+# support C++14 features used by LLVM 10.0.0
+set(CMAKE_CXX_STANDARD 14)
+
+find_package(LLVM 10 REQUIRED CONFIG)
+add_definitions(${LLVM_DEFINITIONS})
+include_directories(${LLVM_INCLUDE_DIRS})
+link_directories(${LLVM_LIBRARY_DIRS})
+
+
+message(${LLVM_INCLUDE_DIRS})
+include_directories(./include)
+
+add_library(heapliveness MODULE
+./src/Common.cc    
+./src/PointsToPass.cc
+
+)
+
+set_target_properties(heapliveness PROPERTIES
+    COMPILE_FLAGS "-fno-rtti -fPIC -g"
+)
