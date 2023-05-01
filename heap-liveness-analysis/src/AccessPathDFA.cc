@@ -34,6 +34,17 @@ BitVector AccessPathDFA::meetOp(Instruction &I) {
 
   BitVector newOut(256, true);
 
+            if (isa<BranchInst>(&I))
+            {
+
+                auto BB = I.getParent();
+                for (auto successorBB : successors(BB))
+                {
+                    auto &successorInst = successorBB->front();
+                    newOut &= InS[&successorInst];
+                }
+                return newOut;
+            }
   auto successorInst = I.getNextNode();
   newOut &= InS[successorInst];
   return newOut;
@@ -203,7 +214,7 @@ tuple<BitVector, BitVector, BitVector> AccessPathDFA::getSets(Instruction &I) {
         if (std::find(domain.begin(), domain.end(), *prefix) == domain.end()) {
           domain.push_back(*prefix);
         }
-        transferSet.set(std::find(domain.begin(), domain.end(), *prefix) -
+        directSet.set(std::find(domain.begin(), domain.end(), *prefix) -
                         domain.begin());
       }
     }

@@ -18,6 +18,7 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
+#include <llvm/IR/CFG.h>
 
 using namespace llvm;
 
