@@ -39,3 +39,8 @@ std::string getShortValueName(Value *v)
         return "\"" + inst + "\"";
     }
 }
+
+bool isPointerToPointer(Type *T)
+{
+    return T->isPointerTy() && T->getContainedType(0)->isPointerTy();
+}

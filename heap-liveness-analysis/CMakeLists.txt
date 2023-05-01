@@ -10,16 +10,22 @@ add_definitions(${LLVM_DEFINITIONS})
 include_directories(${LLVM_INCLUDE_DIRS})
 link_directories(${LLVM_LIBRARY_DIRS})
 
-
 message(${LLVM_INCLUDE_DIRS})
 include_directories(./include)
 
 add_library(heapliveness MODULE
-./src/Common.cc    
-./src/PointsToPass.cc
+    ./src/Common.cc
+    ./src/AccessPath.cc
+    ./src/DeadMemoryFreePass.cc
+    ./src/AccessPathDFA.cc
+)
 
+add_library(memorygraph MODULE
+    ./src/Common.cc
+    ./src/MemoryGraph.cc
+    ./src/MemoryGraphPass.cc
 )
 
 set_target_properties(heapliveness PROPERTIES
-    COMPILE_FLAGS "-fno-rtti -fPIC -g"
+    COMPILE_FLAGS "-fno-rtti -g -fPIC"
 )

@@ -22,3 +22,5 @@
 using namespace llvm;
 
 std::string getShortValueName(Value *v);
+
+bool isPointerToPointer(Type *T);
