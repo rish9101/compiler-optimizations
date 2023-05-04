@@ -19,10 +19,13 @@ make
 ```
 
 ### To run the tests
+The tests generate the binary and the IR file for the benchmark. They also run each binary with valgrind to check for any memory errors generated due to frees inserted.
+
 ```bash
 cd tests
 make <correctness-check-benchmark/interprocedural-benchmark/intraprocedural-linked-list-benchmark>
 ```
+
 
 ### Benchmarks (Possible)
 

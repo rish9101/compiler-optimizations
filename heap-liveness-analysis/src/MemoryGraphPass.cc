@@ -116,7 +116,6 @@ bool MemoryGraphPass::runOnFunction(Function &F) {
       analyzeInst(I);
     }
   }
-  memGraph->print();
 
   return false;
 }

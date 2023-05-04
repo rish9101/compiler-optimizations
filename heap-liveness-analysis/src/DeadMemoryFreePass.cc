@@ -158,6 +158,7 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
     }
   }
 
+  int numFreesInserted = 0;
   for (auto freeCall : freeCalls) {
     auto memNode = memoryGraph->getTargetMemoryNode(
         memoryGraph->getNodeFromValue(freeCall.first));
@@ -167,7 +168,11 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
     }
 
     CallInst::CreateFree(freeCall.first, freeCall.second->getNextNode());
+    numFreesInserted++;
   }
+  outs() << formatv(
+      "Number of free calls inserted in the function {0} are {1}\n",
+      F.getName(), numFreesInserted);
 
   return true;
 }
