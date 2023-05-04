@@ -1,21 +1,28 @@
 # HEAP LIVENESS ANALYSIS
 
-## Access Path based analysis
+This is a compile-time instrumentation project to insert calls to free as soon as a heap object is dead. It is based on liveness-based heap analysis approached mentioned in the "Data Flow Analysis - Theory and Practice" book. It is still a bit limited in what programs it can handle but does not affect correctness of a program for any case
 
-### Intraprocedural analysis
+## How to build
 
-We only deal with
+### Requirements
+- cmake (tested on version 3.16.3)
+- llvm (tested on version 10.0.0)
+- valgrind-3.15.0
 
-a = malloc()
-and 
-a->f1 = b->f2
-calls.
 
-Thus the IR instructions considered are 
-1. bitcast(called after malloc calls)
-2. getelementptr (used to access fields of a struct or array)
-3. load/store (can be an assignment statement OR a use statement, depending on the operands)
+### To build the compiler passes.
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
 
+### To run the tests
+```bash
+cd tests
+make <correctness-check-benchmark/interprocedural-benchmark/intraprocedural-linked-list-benchmark>
+```
 
 ### Benchmarks (Possible)
 
