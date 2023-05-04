@@ -87,28 +87,16 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
 
   auto memoryGraph = getAnalysis<MemoryGraphPass>().getMemoryGraph(F);
   outs() << "We have the Memory Graph\n";
-  memoryGraph->print();
   int i = 0;
 
   vector<pair<Value *, Instruction *>> freeCalls;
-
-  Module *M = F.getParent();
-  SmallVector<Type *, 2> freeArgs;
-  // freeArgs.push_back(Type::getPointerTo(Type::))
-
-  freeArgs.push_back(PointerType::get(IntegerType::get(M->getContext(), 8), 0));
-  auto funcType =
-      FunctionType::get(Type::getVoidTy(M->getContext()), freeArgs, false);
-  auto freeFunc =
-      dyn_cast<Function>(M->getOrInsertFunction("free", funcType).getCallee());
-
   vector<Value *> mallocVals;
   vector<Node *> removedMemNodes;
+  vector<Node *> freedNodes;
 
   for (auto &BB : F) {
     for (auto &I : BB) {
       if (isa<ReturnInst>(&I)) {
-        outs() << "Terminator " << I << "\n";
         continue;
       }
       if (isa<CallInst>(&I) && dyn_cast<CallInst>(&I)
@@ -117,11 +105,23 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
                                    ->isPointerTy()) {
         mallocVals.push_back(&I);
       }
+      if (isa<CallInst>(&I) &&
+          dyn_cast<CallInst>(&I)->getCalledFunction()->getName().equals(
+              "free")) {
+        // We have a free call, remove this node from memory graph, it has been
+        // freed.
+
+        auto freeArg = I.getOperand(0);
+        auto memNode = memoryGraph->getTargetMemoryNode(
+            memoryGraph->getNodeFromValue(freeArg));
+        outs() << formatv("Found a free inst for {0} - {1}\n",
+                          getShortValueName(freeArg), memNode->str());
+        freedNodes.push_back(memNode);
+      }
       auto aps = ptdfa->OutS[&I];
       vector<Node *> accessedNodes;
       for (auto bit : aps.set_bits()) {
         auto ap = ptdfa->domain[bit];
-        outs() << formatv("Getting nodes for AP: {0}\n", ap.str());
         auto n = getAccessedNodes(&ap, memoryGraph);
         for (auto a : n) {
           accessedNodes.push_back(a);
@@ -133,7 +133,6 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
 
         switch (crn) {
         case CAN_REMOVE_NODE::YES: {
-          outs() << "IN YES\n";
           auto val = memoryGraph->getRootValueForMemNode(memNode);
 
           freeCalls.push_back(pair<Value *, Instruction *>(val, &I));
@@ -144,7 +143,6 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
         case CAN_REMOVE_NODE::MAYBE: {
           // If mem node is accessed by a global variable AND this is not a main
           // function DO NOT free the node
-          outs() << "IN MAYBE\n";
           if (memoryGraph->hasGlobalAccessor(memNode) == false ||
               F.getName().equals("main")) {
             auto val = memoryGraph->getRootValueForMemNode(memNode);
@@ -164,6 +162,12 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
   }
 
   for (auto freeCall : freeCalls) {
+    auto memNode = memoryGraph->getTargetMemoryNode(
+        memoryGraph->getNodeFromValue(freeCall.first));
+    if (std::find(freedNodes.begin(), freedNodes.end(), memNode) !=
+        freedNodes.end()) {
+      continue;
+    }
 
     CallInst::CreateFree(freeCall.first, freeCall.second->getNextNode());
   }

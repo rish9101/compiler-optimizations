@@ -34,17 +34,15 @@ BitVector AccessPathDFA::meetOp(Instruction &I) {
 
   BitVector newOut(256, true);
 
-            if (isa<BranchInst>(&I))
-            {
+  if (isa<BranchInst>(&I)) {
 
-                auto BB = I.getParent();
-                for (auto successorBB : successors(BB))
-                {
-                    auto &successorInst = successorBB->front();
-                    newOut &= InS[&successorInst];
-                }
-                return newOut;
-            }
+    auto BB = I.getParent();
+    for (auto successorBB : successors(BB)) {
+      auto &successorInst = successorBB->front();
+      newOut &= InS[&successorInst];
+    }
+    return newOut;
+  }
   auto successorInst = I.getNextNode();
   newOut &= InS[successorInst];
   return newOut;
@@ -58,23 +56,10 @@ BitVector AccessPathDFA::transferFunc(Instruction &I) {
   std::tie<BitVector, BitVector, BitVector>(LKill, LDirect, LTransfer) =
       getSets(I);
   newIn &= OutS[&I];
-
-  outs() << "Sets for " << I << " are - \n ";
-  outs() << "Out - ";
-  printAPFromBV(OutS[&I]);
-  outs() << "Kill - ";
-  printAPFromBV(LKill);
   LKill.flip();
   newIn &= LKill;
   newIn |= LDirect;
   newIn |= LTransfer;
-  outs() << "Direct - ";
-  printAPFromBV(LDirect);
-  outs() << "Transfer - ";
-  printAPFromBV(LTransfer);
-  outs() << "In - ";
-  printAPFromBV(newIn);
-  outs() << "\n\n";
   return newIn;
 }
 
@@ -129,8 +114,6 @@ tuple<BitVector, BitVector, BitVector> AccessPathDFA::getSets(Instruction &I) {
   BitVector transferSet(256, false);
   // We have an instruction, based on what kind of inst it is, get direct,,
   // kill and transfer sets
-
-  outs() << "Getting sets for " << I << "\n";
 
   if (auto callInst = dyn_cast<CallInst>(&I)) {
     if (callInst->getCalledFunction()->getReturnType()->isPointerTy()) {
@@ -215,17 +198,14 @@ tuple<BitVector, BitVector, BitVector> AccessPathDFA::getSets(Instruction &I) {
           domain.push_back(*prefix);
         }
         directSet.set(std::find(domain.begin(), domain.end(), *prefix) -
-                        domain.begin());
+                      domain.begin());
       }
     }
   } else if (auto loadInst = dyn_cast<LoadInst>(&I)) {
     // If the type being loaded is ptr, then it is an a = *(b) type of
     // assignment, which is useful
     if (isPointerToPointer(loadInst->getPointerOperandType()) != false) {
-      outs() << "PTR OP FOR LOAD INST "
-             << getShortValueName(loadInst->getPointerOperand()) << "\n";
       auto transferBaseAP = new AccessPath(loadInst->getPointerOperand());
-      outs() << formatv("transferBaseAP {0}\n", transferBaseAP->str());
       auto generatedAp = new AccessPath(&I);
 
       for (auto set_bit : OutS[&I].set_bits()) {
