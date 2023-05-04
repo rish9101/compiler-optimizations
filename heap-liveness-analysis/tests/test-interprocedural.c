@@ -24,7 +24,6 @@ struct A *global_ptr;
 int *foo(int x) {
 
     int *a = malloc(0x4);
-    // c->f3 = malloc(sizeof(struct B));
     *a = x;
     global_ptr =  malloc(sizeof(struct A));
     return a;
@@ -40,7 +39,6 @@ int main(int x)
     a->f3->f2 = malloc(sizeof(struct C));
 
     int *y = foo(a);
-    // struct B *b = malloc(sizeof(struct B));
 
 
     return a->f3->f1 + (*y);
