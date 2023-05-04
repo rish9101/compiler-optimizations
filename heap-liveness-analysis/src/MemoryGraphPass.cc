@@ -93,7 +93,6 @@ void MemoryGraphPass::analyzeInst(Instruction &I) {
         auto baseMemNode =
             memGraph->getTargetMemoryNode(memGraph->getNodeFromValue(ptrVal));
         destNode = memGraph->getTargetDerefNode(baseMemNode);
-        outs() << formatv("DEST NODE IS {0}\n", destNode);
       }
       memGraph->addEdge(srcNode, destNode,
                         new Edge(srcNode, destNode, nullptr));
@@ -110,13 +109,10 @@ bool MemoryGraphPass::runOnModule(Module &M) {
 
 bool MemoryGraphPass::runOnFunction(Function &F) {
 
-  outs() << formatv("Memory Graph Pass for {0}\n", F.getName());
-
   memGraph = new MemoryGraph();
 
   for (auto &BB : F) {
     for (auto &I : BB) {
-      outs() << "Analyzing Inst: " << I << "\n";
       analyzeInst(I);
     }
   }

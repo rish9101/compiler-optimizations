@@ -96,16 +96,6 @@ void AccessPathDFA::performDFA(Function &F) {
         changed = true;
     }
   }
-
-  for (auto &BB : F) {
-    for (auto &i : BB) {
-      outs() << i << "\n";
-      outs() << "\tInS - ";
-      printAPFromBV(InS[&i]);
-      outs() << "\tOutS - ";
-      printAPFromBV(OutS[&i]);
-    }
-  }
 }
 
 tuple<BitVector, BitVector, BitVector> AccessPathDFA::getSets(Instruction &I) {
@@ -222,7 +212,6 @@ tuple<BitVector, BitVector, BitVector> AccessPathDFA::getSets(Instruction &I) {
       AccessPath *loadAP = nullptr;
       if (isa<GlobalVariable>(loadInst->getPointerOperand())) {
         loadAP = new AccessPath(loadInst->getPointerOperand());
-        outs() << formatv("loadAP {0}\n", loadAP->str());
       } else {
         loadAP = AccessPath::CreateDerefPath(loadInst->getPointerOperand());
       }

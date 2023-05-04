@@ -13,7 +13,7 @@ vector<Node *> DeadMemoryFreePass::getAccessedNodes(AccessPath *ap,
       // points to
       auto baseNode = memGraph->getNodeFromValue(val);
       if (baseNode == nullptr)
-        outs() << formatv("COULD NOT FIND BASENODEfor {0}\n",
+        outs() << formatv("COULD NOT FIND BASENODE for {0}\n",
                           getShortValueName(val));
 
       currNode = memGraph->getTargetMemoryNode(baseNode);
@@ -86,7 +86,6 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
   ptdfa->performDFA(F);
 
   auto memoryGraph = getAnalysis<MemoryGraphPass>().getMemoryGraph(F);
-  outs() << "We have the Memory Graph\n";
   int i = 0;
 
   vector<pair<Value *, Instruction *>> freeCalls;
@@ -114,8 +113,6 @@ bool DeadMemoryFreePass::runOnFunction(Function &F) {
         auto freeArg = I.getOperand(0);
         auto memNode = memoryGraph->getTargetMemoryNode(
             memoryGraph->getNodeFromValue(freeArg));
-        outs() << formatv("Found a free inst for {0} - {1}\n",
-                          getShortValueName(freeArg), memNode->str());
         freedNodes.push_back(memNode);
       }
       auto aps = ptdfa->OutS[&I];
