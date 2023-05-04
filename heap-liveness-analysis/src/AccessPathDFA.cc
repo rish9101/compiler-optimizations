@@ -4,12 +4,12 @@ AccessPathDFA::AccessPathDFA(Function &F) {
 
   for (auto &BB : F) {
     for (auto &I : BB) {
-      InS[&I] = BitVector(256, false);
-      OutS[&I] = BitVector(256, false);
+      InS[&I] = BitVector(1024, false);
+      OutS[&I] = BitVector(1024, false);
     }
   }
 
-  domain.reserve(128);
+  domain.reserve(512);
 }
 
 void AccessPathDFA::printBV(BitVector bv) {

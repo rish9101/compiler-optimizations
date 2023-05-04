@@ -26,8 +26,7 @@ cd tests
 make <correctness-check-benchmark/interprocedural-benchmark/intraprocedural-linked-list-benchmark>
 ```
 
+The compiler pass prints the number of frees inserted in the program. We use the intraprocedural-linked-list-benchmark to plot for the accuracy experiment and vary the number of elemnts in the linked list manually and plot the graph.
 
-### Benchmarks (Possible)
+- The pass might crash for a larger number of elements in the linked list. This is because of the large amount of access paths ganerated in the IR for each access.
 
-1. https://www.nas.nasa.gov/software/npb.html
-2. https://parsec.cs.princeton.edu/
