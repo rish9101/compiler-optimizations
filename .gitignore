@@ -3,3 +3,4 @@
 *.bb
 *.ll
 .vscode/
+build/
